@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>My First Website</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      font-family: Arial, sans-serif;
+      background-color: #f0f2f5;
+      overflow: hidden;
+    }
+
+    canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 0;
+    }
+
+    .card {
+      position: relative;
+      z-index: 1;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background-color: rgba(255, 255, 255, 0.95);
+      border-radius: 10px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+
+    button {
+      margin-top: 10px;
+      padding: 8px 15px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 8px;
+      margin-top: 5px;
+    }
+
+    .message {
+      margin-top: 10px;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      background-color: #fdfdfd;
+    }
+
+    .timestamp {
+      font-size: 0.9em;
+      color: #888;
+      margin-bottom: 5px;
+      display: block;
+    }
+
+    #savedMessages {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+  </style>
+</head>
+<body>
+
+<canvas id="particleCanvas"></canvas>
+
+<div class="card">
+  <h3>Hello everyone this is my first website</h3>
+  <p>I am excited about this! My dad and I made it with a little help from AI. It may not be perfect, but you can send me a message below!</p>
+
+  <button onclick="saveMessage()">Save your message!</button>
+
+  <div style="margin-top: 10px;">
+    <label for="message">Your message:</label><br>
+    <textarea id="message" rows="4" placeholder="Write your message here..."></textarea>
+  </div>
+
+  <div id="savedMessages" style="margin-top: 15px;"></div>
+</div>
+
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/9.x.x/firebase-app.js";
+  import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.x.x/firebase-firestore.js";
+  // TODO: Add SDKs for other Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  // IMPORTANT: Replace these placeholders with your actual Firebase project configuration!
+  // You can find this in your Firebase Console under Project settings (the gear icon ⚙️) -> Your apps -> Web app
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY", // Example: "AIzaSyC0fXk_..."
+    authDomain: "first-website-a53dd.firebaseapp.com",
+    projectId: "first-website-a53dd",
+    storageBucket: "first-website-a53dd.appspot.com",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID", // Example: "1098221350206"
+    appId: "YOUR_APP_ID", // Example: "1:1098221350206:web:..."
+    measurementId: "YOUR_MEASUREMENT_ID" // For Google Analytics 4, usually starts with 'G-'. Your Property ID 497680475 is not in the correct format for this field. If you have GA4 enabled, get the Measurement ID from Firebase project settings -> Integrations -> Google Analytics.
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app); // Get a reference to the Firestore database
+  const messagesCollection = collection(db, 'messages'); // Reference to your 'messages' collection
+
+  // Particle background (UNCHANGED)
+  const canvas = document.getElementById('particleCanvas');
+  const ctx = canvas.getContext('2d');
+  let width = canvas.width = window.innerWidth;
+  let height = canvas.height = window.innerHeight;
+
+  const particleCount = 50;
+  const radius = 3;
+  const particles = [];
+
+  class Particle {
+    constructor() {
+      this.x = Math.random() * width;
+      this.y = Math.random() * height;
+      this.dx = (Math.random() - 0.5) * 0.5;
+      this.dy = (Math.random() - 0.5) * 0.5;
+      this.color = Math.random() > 0.5 ? 'red' : 'blue';
+    }
+
+    move() {
+      this.x += this.dx;
+      this.y += this.dy;
+
+      // bounce off walls
+      if (this.x < 0 || this.x > width) this.dx *= -1;
+      if (this.y < 0 || this.y > height) this.dy *= -1;
+    }
+
+    draw() {
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = this.color;
+      ctx.fill();
+    }
+  }
+
+  for (let i = 0; i < particleCount; i++) {
+    particles.push(new Particle());
+  }
+
+  function distance(p1, p2) {
+    return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+  }
+
+  function animate() {
+    ctx.clearRect(0, 0, width, height);
+
+    for (let i = 0; i < particles.length; i++) {
+      const p1 = particles[i];
+      p1.move();
+
+      // Check for interactions
+      for (let j = i + 1; j < particles.length; j++) {
+        const p2 = particles[j];
+        const d = distance(p1, p2);
+
+        if (d < 80) {
+          if (p1.color === p2.color) {
+            // attraction
+            p1.dx += (p2.x - p1.x) * 0.0001;
+            p1.dy += (p2.y - p1.y) * 0.0001;
+            p2.dx += (p1.x - p2.x) * 0.0001;
+            p2.dy += (p1.y - p2.y) * 0.0001;
+          } else {
+            // repulsion
+            p1.dx -= (p2.x - p1.x) * 0.0002;
+            p1.dy -= (p2.y - p1.y) * 0.0002;
+            p2.dx -= (p1.x - p2.x) * 0.0002;
+            p2.dy -= (p1.y - p2.y) * 0.0002;
+          }
+        }
+      }
+
+      p1.draw();
+    }
+
+    requestAnimationFrame(animate);
+  }
+
+  animate();
+
+  window.addEventListener('resize', () => {
+    width = canvas.width = window.innerWidth;
+    height = canvas.height = window.innerHeight;
+  });
+
+  // Message functions (MODIFIED FOR FIREBASE)
+
+  // This function will now be accessible globally as it's defined outside the module scope
+  window.saveMessage = async function () {
+    const messageBox = document.getElementById("message");
+    const messageText = messageBox.value.trim();
+
+    if (messageText === "") {
+      alert("Please enter a message before clicking the button.");
+      return;
+    }
+
+    try {
+      // Add a new message document to the 'messages' collection
+      await addDoc(messagesCollection, {
+        text: messageText,
+        // Use serverTimestamp() for a consistent timestamp from Firestore's server
+        timestamp: serverTimestamp()
+      });
+      messageBox.value = ""; // Clear message box after sending
+    } catch (e) {
+      console.error("Error adding document: ", e);
+      alert("Oops! There was an error saving your message. Please try again.");
+    }
+  };
+
+  // This function sets up the real-time listener for messages
+  function setupRealtimeMessagesListener() {
+    // Create a query to get messages, ordered by timestamp descending (newest first)
+    const q = query(messagesCollection, orderBy('timestamp', 'desc'));
+
+    // Set up a real-time listener
+    onSnapshot(q, (snapshot) => {
+      const displayDiv = document.getElementById("savedMessages");
+      displayDiv.innerHTML = ''; // Clear all messages to re-render
+
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        // Use the server timestamp if available, otherwise a placeholder
+        const timeString = data.timestamp ? data.timestamp.toDate().toLocaleString() : 'Loading...';
+        displayMessage({ text: data.text, time: timeString });
+      });
+    }, (error) => {
+      console.error("Error listening to messages: ", error);
+      // You might want to display an error to the user here
+    });
+  }
+
+  // Helper function to display a single message (UNCHANGED logic, but called differently)
+  function displayMessage(entry) {
+    const displayDiv = document.getElementById("savedMessages");
+    const msg = document.createElement("div");
+    msg.className = "message";
+
+    msg.innerHTML = `<span class="timestamp">${entry.time}</span>${entry.text}`;
+    displayDiv.prepend(msg); // Use prepend to add new messages to the top
+    displayDiv.scrollTop = displayDiv.scrollHeight; // Keep scrolling to bottom for user experience
+  }
+
+  // When the window loads, start listening for messages
+  window.onload = function () {
+    setupRealtimeMessagesListener();
+  };
+</script>
+
+</body>
+</html>
